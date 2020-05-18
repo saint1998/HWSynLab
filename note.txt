@@ -1,0 +1,43 @@
+ใช้ module vgaSystem ได้ทั้ง 2 ข้อ ได้ทั้ง simulate และโปรแกรมลงบอร์ด
+
+* uart ใช้ baud rate 9600, 1 stop bit
+* ไม่ได้ลองกับ VGA จริง เดาว่าน่าจะใช้กับของจริงไม่ได้ Vsync น่าจะผิด
+
+
+vgaSystem
+- มี 3 module ย่อยหลัก ๆ คือ vga_controller, uart_transmitter, uart_receiver
+- reg circle_x, circle_y เก็บจุดศูนย์กลางวงกลม
+- reg color เก็บค่าสีของวงกลม
+- vgaRed, vgaGreen, vgaBlue จะถูกกำหนดค่าสีโดยดูว่าค่า vga_x, vga_y คือตำแหน่งกำลังวาดอยู่ ตกในวงกลมรึเปล่า ถ้าตกในวงกลม จะใช้สี color ในการวาด ถ้าไม่ตกในวงกลม จะวาดด้วยสีดำ 12'h000
+- คอยดูว่ามีข้อมูลจาก uart เข้ามาไหม ถ้าข้อมูลเข้ามาตรงตามโจทย์ ก็จะทำงานตามโจทย์บอก (เลื่อนวงกลม/เปลี่ยนสี) และตอบกลับไป
+- มี debug อยู่ล่างสุดของไฟล์ ให้ seven segment แสดงค่าสีที่ใช้อยู่ และ led[7:0] แสดง vga_x, led[15:8] แสดง vga_y แค่อย่างละ 8 bit พอเห็นว่าเลื่อนวงกลมทำงานถูก
+
+* ไฟล์ simulation ชื่อ tester ของ TA
+* ก่อน simulate ต้องตั้งค่าตามที่ TA บอกก่อน (Tools -> Settings -> Simulation -> Simulation tab -> เปลี่ยนค่า xsim.simulate.runtime เป็น 0.01s)
+* ถ้าไม่มีอะไรผิด ตอน simulate เสร็จใน tab Tcl Console จะขึ้นข้อความประมาณนี้
+# run 0.01s
+Test 1(VGA Signal & Output): 
+  Pass
+End of Test
+* simulate แล้วจะมี incorrect นิดหน่อย เดาว่า timing น่าจะเหลื่อมที่ไหนสักที่ แต่ TA ตั้งไว้ให้ผิดได้นิดหน่อย เลยยังผ่านอยู่
+
+
+vga_controller
+- ต้องการ clock 25 MHz เพื่อแสดงผล 640*480    60 Hz
+- มี output เป็นสัญญาณ sync และค่า pixel x, y ที่กำลังวาดอยู่
+- ข้างในจะมี parameter กำหนด front porch, sync pulse width, back porch, display portion อย่างละคู่ ของทั้งแกน x และแกน y
+- ที่เหลือเป็นควบคุม timing ว่า sync อยู่ หรือวาดอยู่ หรือกวาดเฉย ๆ
+
+* เป็นตัวควบคุมสัญญาณ ไม่ได้เป็นตัวกำหนดสีที่จะวาด vgaSystem เป็นตัวกำหนดค่าสี
+
+
+uart_transmitter
+- ต่อกับ RsTx ของบอร์ด
+- มี input คือ data ที่จะส่ง, สัญญาณ transmit
+- จะส่งข้อมูล start bit + data 8 bit + stop bit รวม 10 bit เมื่ออยู่ในสถานะ idle และ transmit เป็น high
+
+
+uart_receiver
+- ต่อกับ RsRx ของบอร์ด
+- มี output เป็น data ที่อ่านได้, สถานะ idle, สัญญาณ receive 1 pulse เมื่อมีข้อมูลใหม่เข้ามา
+- จะอ่านข้อมูลแต่ละ bit จากตรงกลางคาบ ((clock rate / baud rate) / 2) เพราะอ่านตอนต้นแล้วบางครั้งได้ค่าไม่ตรง
